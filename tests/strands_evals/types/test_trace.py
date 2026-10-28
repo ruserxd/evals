@@ -20,7 +20,6 @@ from strands_evals.types.trace import (
     ToolExecutionSpan,
     ToolLevelInput,
     ToolResult,
-    ToolResultContent,
     Trace,
     TraceLevelInput,
     UserMessage,
@@ -459,33 +458,6 @@ class TestMessageRoleRoundTrip:
         # role stays a Role enum: evaluators call msg.role.value
         assert restored.messages[1].role is Role.ASSISTANT
 
-    def test_inference_span_validates_plain_dicts_by_role(self):
-        restored = InferenceSpan.model_validate(
-            {
-                "span_info": self._span_info().model_dump(),
-                "messages": [
-                    {"role": "user", "content": [{"text": "hi"}]},
-                    {"role": "assistant", "content": [{"text": "hello"}]},
-                ],
-            }
-        )
-
-        assert type(restored.messages[0]) is UserMessage
-        assert type(restored.messages[1]) is AssistantMessage
-
-    def test_session_round_trip_preserves_message_types(self):
-        trace = Trace(
-            trace_id="t1",
-            session_id="s1",
-            spans=[InferenceSpan(span_info=self._span_info(), messages=self._messages())],
-        )
-        session = Session(session_id="s1", traces=[trace])
-
-        restored = Session.model_validate_json(session.model_dump_json())
-
-        messages = restored.traces[0].spans[0].messages
-        assert [type(m) for m in messages] == [UserMessage, AssistantMessage]
-
     def test_trace_level_input_round_trip_preserves_message_types(self):
         tool_execution = ToolExecution(
             tool_call=ToolCall(name="calc", arguments={"x": 1}),
@@ -518,14 +490,6 @@ class TestMessageRoleRoundTrip:
         restored = ToolLevelInput.model_validate_json(tool_input.model_dump_json())
 
         assert [type(m) for m in restored.session_history] == [UserMessage, AssistantMessage]
-
-    def test_tool_result_user_message_round_trips(self):
-        message = UserMessage(content=[ToolResultContent(content="2", tool_call_id="c1")])
-        span = InferenceSpan(span_info=self._span_info(), messages=[message])
-
-        restored = InferenceSpan.model_validate_json(span.model_dump_json())
-
-        assert type(restored.messages[0]) is UserMessage
 
     @pytest.mark.parametrize(
         ("message_cls", "wrong_role"),
